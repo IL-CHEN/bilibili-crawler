@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B 站评论数据看板</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2300aeec'/%3E%3Ctext x='50' y='70' font-size='52' font-weight='bold' font-family='Arial' fill='white' text-anchor='middle'%3EB%3C/text%3E%3C/svg%3E">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts-wordcloud@2.1.0/dist/echarts-wordcloud.min.js"></script>
+    <style>
+        :root {
+            --primary: #00aeec;
+            --primary-dark: #0084b4;
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --text: #1f2329;
+            --text-secondary: #6b7280;
+            --border: #e5e7eb;
+            --shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        .container { max-width: 1440px; margin: 0 auto; padding: 24px 20px 40px; }
+
+        /* ===== 顶部 ===== */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .header-title { display: flex; align-items: center; gap: 10px; }
+        .logo {
+            width: 36px; height: 36px; border-radius: 10px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-weight: 700; font-size: 18px;
+        }
+        .header h1 { font-size: 22px; font-weight: 700; }
+        .header-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+        .header-right { display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--text-secondary); }
+        .health { display: flex; align-items: center; gap: 6px; }
+        .health-dot { width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; }
+        .health-dot.ok { background: #22c55e; }
+        .health-dot.err { background: #ef4444; }
+        .btn {
+            border: none; border-radius: 8px; padding: 8px 16px;
+            font-size: 13px; cursor: pointer; transition: opacity .15s;
+        }
+        .btn:hover { opacity: 0.85; }
+        .btn-primary { background: var(--primary); color: #fff; }
+
+        /* ===== Tab ===== */
+        .tabs { display: flex; gap: 6px; margin-bottom: 18px; }
+        .tab {
+            padding: 9px 22px; border-radius: 10px 10px 0 0;
+            background: #e4e7eb; color: var(--text-secondary);
+            font-size: 14px; cursor: pointer; border: none;
+        }
+        .tab.active { background: var(--card); color: var(--primary-dark); font-weight: 600; }
+
+        /* ===== 卡片 ===== */
+        .card {
+            background: var(--card); border-radius: 14px;
+            box-shadow: var(--shadow); padding: 18px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 14px; margin-bottom: 18px;
+        }
+        .stat-card {
+            background: var(--card); border-radius: 14px; box-shadow: var(--shadow);
+            padding: 16px 18px;
+        }
+        .stat-label { font-size: 13px; color: var(--text-secondary); }
+        .stat-value { font-size: 28px; font-weight: 700; margin-top: 6px; color: var(--text); }
+        .stat-value.accent { color: var(--primary-dark); }
+
+        .chart-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px;
+        }
+        .chart-box { height: 360px; }
+        .chart-box-full { width: 100%; height: 420px; margin-bottom: 18px; }
+        .chart-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+
+        /* ===== 评论明细 ===== */
+        .filter-bar {
+            display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px;
+        }
+        .filter-bar input, .filter-bar select {
+            padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
+            font-size: 13px; background: #fff; outline: none;
+        }
+        .filter-bar input:focus, .filter-bar select:focus { border-color: var(--primary); }
+        .filter-bar .grow { flex: 1; min-width: 160px; }
+        table {
+            width: 100%; border-collapse: collapse; font-size: 13px;
+        }
+        thead th {
+            text-align: left; padding: 10px 12px; color: var(--text-secondary);
+            background: #f7f8fa; border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+        tbody td {
+            padding: 10px 12px; border-bottom: 1px solid var(--border);
+            vertical-align: top; word-break: break-word;
+        }
+        tbody tr:hover { background: #fafbfc; }
+        .content-cell { max-width: 480px; }
+        .user-cell { font-weight: 600; white-space: nowrap; }
+        .region-tag {
+            display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px;
+            background: #e8f6ff; color: var(--primary-dark); white-space: nowrap;
+        }
+        .region-tag.overseas { background: #f3f0ff; color: #6d5bd0; }
+        a.video-link { color: var(--primary); text-decoration: none; }
+        a.video-link:hover { text-decoration: underline; }
+        .empty-row { text-align: center; color: var(--text-secondary); padding: 40px 0; }
+
+        .pagination {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 10px; margin-top: 14px; font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .pagination .page-info { display: flex; align-items: center; gap: 8px; }
+        .pagination .btn { padding: 6px 14px; background: #f1f3f5; color: var(--text); }
+        .pagination .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+        .loading, .error-box { text-align: center; padding: 60px 20px; font-size: 14px; color: var(--text-secondary); }
+        .error-box { color: #dc2626; }
+        .hidden { display: none !important; }
+
+        footer {
+            margin-top: 24px; text-align: center; font-size: 12px;
+            color: var(--text-secondary); line-height: 1.7;
+        }
+        footer a { color: var(--text-secondary); }
+
+        @media (max-width: 1100px) {
+            .stats-grid { grid-template-columns: repeat(3, 1fr); }
+            .chart-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 640px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ===== 顶部 ===== -->
+    <div class="header">
+        <div class="header-title">
+            <div class="logo">B</div>
+            <div>
+                <h1>B 站评论数据看板</h1>
+                <div class="header-sub">评论采集 · 地域分析 · 词频洞察</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="health" id="healthBox">
+                <span class="health-dot" id="healthDot"></span>
+                <span id="healthText">检测数据库连接…</span>
+            </div>
+            <button class="btn btn-primary" id="refreshBtn">刷新数据</button>
+        </div>
+    </div>
+
+    <!-- ===== Tab ===== -->
+    <div class="tabs">
+        <button class="tab active" data-tab="overview">数据概览</button>
+        <button class="tab" data-tab="comments">评论明细</button>
+    </div>
+
+    <!-- ===== 数据概览 ===== -->
+    <div id="tab-overview">
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-label">总评论数</div><div class="stat-value accent" id="statTotal">--</div></div>
+            <div class="stat-card"><div class="stat-label">覆盖视频</div><div class="stat-value" id="statVideos">--</div></div>
+            <div class="stat-card"><div class="stat-label">活跃用户</div><div class="stat-value" id="statUsers">--</div></div>
+            <div class="stat-card"><div class="stat-label">国内评论</div><div class="stat-value" id="statDomestic">--</div></div>
+            <div class="stat-card"><div class="stat-label">海外评论</div><div class="stat-value" id="statOverseas">--</div></div>
+            <div class="stat-card"><div class="stat-label">国内占比</div><div class="stat-value" id="statRatio">--</div></div>
+        </div>
+
+        <div id="overviewLoading" class="loading">正在加载统计数据…</div>
+        <div id="overviewError" class="error-box hidden"></div>
+        <div id="overviewContent" class="hidden">
+            <div class="chart-grid">
+                <div class="card">
+                    <div class="chart-title">国内评论地区分布 TOP15</div>
+                    <div id="regionChart" class="chart-box"></div>
+                </div>
+                <div class="card">
+                    <div class="chart-title">国内 vs 海外占比</div>
+                    <div id="ratioChart" class="chart-box"></div>
+                </div>
+            </div>
+            <div class="chart-grid">
+                <div class="card">
+                    <div class="chart-title">近 30 天评论趋势</div>
+                    <div id="trendChart" class="chart-box"></div>
+                </div>
+                <div class="card">
+                    <div class="chart-title">评论最多用户 TOP10</div>
+                    <div id="userChart" class="chart-box"></div>
+                </div>
+            </div>
+            <div class="card chart-box-full">
+                <div class="chart-title">评论最多视频 TOP10</div>
+                <div id="videoChart" class="chart-box-full" style="height:360px;"></div>
+            </div>
+            <div class="card chart-box-full">
+                <div class="chart-title">评论高频词云</div>
+                <div id="wordcloudChart" class="chart-box-full" style="height:360px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 评论明细 ===== -->
+    <div id="tab-comments" class="hidden">
+        <div class="card">
+            <div class="filter-bar">
+                <input type="text" id="filterKeyword" class="grow" placeholder="搜索评论内容关键词…">
+                <select id="filterRegion">
+                    <option value="">全部地区</option>
+                    <option value="国内">国内</option>
+                    <option value="海外">海外</option>
+                </select>
+                <select id="filterBv">
+                    <option value="">全部视频</option>
+                </select>
+                <select id="filterSort">
+                    <option value="time">按评论时间</option>
+                    <option value="default">按入库顺序</option>
+                </select>
+                <button class="btn btn-primary" id="searchBtn">查询</button>
+            </div>
+
+            <div id="commentsLoading" class="loading hidden">正在加载评论…</div>
+            <div id="commentsError" class="error-box hidden"></div>
+
+            <div style="overflow-x:auto;">
+                <table id="commentsTable">
+                    <thead>
+                        <tr>
+                            <th>用户</th>
+                            <th>评论内容</th>
+                            <th>地区</th>
+                            <th>视频</th>
+                            <th>评论时间</th>
+                        </tr>
+                    </thead>
+                    <tbody id="commentsBody"></tbody>
+                </table>
+            </div>
+
+            <div class="pagination">
+                <div class="page-info" id="pageInfo">--</div>
+                <div class="page-info">
+                    <button class="btn" id="prevBtn">上一页</button>
+                    <button class="btn" id="nextBtn">下一页</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        仅供学习研究使用 · 请遵守 B 站用户协议并控制抓取频率，勿用于商业用途<br>
+        数据来源：B 站公开评论 · 本项目基于 MIT 许可开源
+    </footer>
+</div>
+
+<script>
+'use strict';
+
+// ===================== 工具函数 =====================
+function esc(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function fetchJson(url, params) {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    const resp = await fetch(url + qs);
+    const json = await resp.json();
+    if (!json.ok) throw new Error(json.error || ('HTTP ' + resp.status));
+    return json.data;
+}
+
+function formatTime(cTime, crawlAt) {
+    if (cTime) {
+        const d = new Date(cTime * 1000);
+        if (!isNaN(d.getTime())) {
+            const p = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+        }
+    }
+    if (crawlAt) return String(crawlAt);
+    return '—';
+}
+
+function showError(boxId, message) {
+    const box = document.getElementById(boxId);
+    box.textContent = '数据加载失败：' + message + '（请确认后端服务与 MongoDB 正常运行）';
+    box.classList.remove('hidden');
+}
+
+// ===================== Tab 切换 =====================
+const tabs = document.querySelectorAll('.tab');
+const tabPanels = { overview: document.getElementById('tab-overview'), comments: document.getElementById('tab-comments') };
+tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+        tabs.forEach(function (t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        Object.keys(tabPanels).forEach(function (key) {
+            tabPanels[key].classList.toggle('hidden', key !== tab.dataset.tab);
+        });
+        if (tab.dataset.tab === 'comments') loadComments(1);
+    });
+});
+
+// ===================== 健康检查 =====================
+async function checkHealth() {
+    const dot = document.getElementById('healthDot');
+    const text = document.getElementById('healthText');
+    try {
+        const resp = await fetch('/api/health');
+        const json = await resp.json();
+        if (json.ok) {
+            dot.classList.add('ok');
+            text.textContent = 'MongoDB 已连接';
+        } else {
+            dot.classList.add('err');
+            text.textContent = 'MongoDB 未连接';
+        }
+    } catch (e) {
+        dot.classList.add('err');
+        text.textContent = '后端服务不可用';
+    }
+}
+
+// ===================== 数据概览 =====================
+const chartInstances = {};
+
+function initChart(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    if (chartInstances[id]) return chartInstances[id];
+    const chart = echarts.init(el);
+    chartInstances[id] = chart;
+    return chart;
+}
+
+function emptyChart(id, text) {
+    const chart = initChart(id);
+    if (chart) chart.setOption({
+        title: { text: text, left: 'center', top: 'center', textStyle: { color: '#9ca3af', fontSize: 14, fontWeight: 'normal' } },
+        xAxis: { show: false }, yAxis: { show: false }, series: []
+    });
+}
+
+function renderRegionChart(data) {
+    const chart = initChart('regionChart');
+    if (!chart) return;
+    const list = data.region_dist.slice(0, 15);
+    if (!list.length) { emptyChart('regionChart', '暂无国内地区数据'); return; }
+    chart.setOption({
+        tooltip: { trigger: 'axis' },
+        grid: { left: 50, right: 20, top: 40, bottom: 60 },
+        xAxis: { type: 'category', data: list.map(function (d) { return d.name; }),
+                 axisLabel: { rotate: 45, fontSize: 11 } },
+        yAxis: { type: 'value', name: '评论数' },
+        series: [{
+            type: 'bar', data: list.map(function (d) { return d.value; }),
+            itemStyle: { color: '#00aeec', borderRadius: [4, 4, 0, 0] },
+            barMaxWidth: 28
+        }]
+    }, true);
+}
+
+function renderRatioChart(data) {
+    const chart = initChart('ratioChart');
+    if (!chart) return;
+    const total = data.domestic_total + data.overseas_total;
+    if (!total) { emptyChart('ratioChart', '暂无占比数据'); return; }
+    chart.setOption({
+        tooltip: { trigger: 'item', formatter: '{b}: {c} 条 ({d}%)' },
+        legend: { orient: 'vertical', left: 'left', top: 'middle' },
+        series: [{
+            type: 'pie', radius: ['40%', '68%'], center: ['58%', '50%'],
+            label: { formatter: '{b}\n{d}%' },
+            data: [
+                { name: '国内', value: data.domestic_total, itemStyle: { color: '#00aeec' } },
+                { name: '海外', value: data.overseas_total, itemStyle: { color: '#8b7cf6' } }
+            ]
+        }]
+    }, true);
+}
+
+function renderTrendChart(data) {
+    const chart = initChart('trendChart');
+    if (!chart) return;
+    const list = data.time_dist || [];
+    const hasData = list.length && list.some(function (d) { return d.count > 0; });
+    if (!hasData) { emptyChart('trendChart', '暂无时间趋势数据（新爬取的评论将带时间）'); return; }
+    chart.setOption({
+        tooltip: { trigger: 'axis' },
+        grid: { left: 50, right: 20, top: 40, bottom: 30 },
+        xAxis: { type: 'category', data: list.map(function (d) { return d.date; }),
+                 axisLabel: { fontSize: 10 } },
+        yAxis: { type: 'value', name: '评论数' },
+        series: [{
+            type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
+            data: list.map(function (d) { return d.count; }),
+            itemStyle: { color: '#00aeec' },
+            lineStyle: { color: '#00aeec', width: 2 },
+            areaStyle: { color: 'rgba(0, 174, 236, 0.12)' }
+        }]
+    }, true);
+}
+
+function renderUserChart(data) {
+    const chart = initChart('userChart');
+    if (!chart) return;
+    const list = data.top_users || [];
+    if (!list.length) { emptyChart('userChart', '暂无用户数据'); return; }
+    chart.setOption({
+        tooltip: { trigger: 'axis' },
+        grid: { left: 110, right: 30, top: 30, bottom: 30 },
+        xAxis: { type: 'value', name: '评论数' },
+        yAxis: { type: 'category', data: list.map(function (u) { return u.name; }).reverse() },
+        series: [{
+            type: 'bar', data: list.map(function (u) { return u.count; }).reverse(),
+            itemStyle: { color: '#f59e0b', borderRadius: [0, 4, 4, 0] },
+            barMaxWidth: 20
+        }]
+    }, true);
+}
+
+function renderVideoChart(data) {
+    const chart = initChart('videoChart');
+    if (!chart) return;
+    const list = data.top_videos || [];
+    if (!list.length) { emptyChart('videoChart', '暂无视频数据'); return; }
+    chart.setOption({
+        tooltip: { trigger: 'axis', formatter: function (p) {
+            const bv = p[0].name;
+            return 'BV: ' + bv + '<br>评论数: ' + p[0].value;
+        } },
+        grid: { left: 80, right: 30, top: 30, bottom: 60 },
+        xAxis: { type: 'value', name: '评论数' },
+        yAxis: { type: 'category', data: list.map(function (v) { return v.name; }).reverse(),
+                 axisLabel: { fontSize: 11 } },
+        series: [{
+            type: 'bar', data: list.map(function (v) { return v.count; }).reverse(),
+            itemStyle: { color: '#7dd3a5', borderRadius: [0, 4, 4, 0] },
+            barMaxWidth: 20
+        }]
+    }, true);
+}
+
+function renderWordcloud(data) {
+    const chart = initChart('wordcloudChart');
+    if (!chart) return;
+    const list = data.wordcloud_data || [];
+    if (!list.length) { emptyChart('wordcloudChart', '暂无词云数据'); return; }
+    chart.setOption({
+        series: [{
+            type: 'wordCloud',
+            shape: 'circle',
+            width: '92%', height: '92%',
+            sizeRange: [12, 52],
+            rotationRange: [-45, 45],
+            gridSize: 6,
+            textStyle: {
+                fontFamily: 'sans-serif',
+                color: function () {
+                    return 'rgb(' + [
+                        Math.floor(Math.random() * 140 + 60),
+                        Math.floor(Math.random() * 160 + 60),
+                        Math.floor(Math.random() * 200 + 40)
+                    ].join(',') + ')';
+                }
+            },
+            data: list
+        }]
+    }, true);
+}
+
+async function loadOverview() {
+    const loading = document.getElementById('overviewLoading');
+    const error = document.getElementById('overviewError');
+    const content = document.getElementById('overviewContent');
+    loading.classList.remove('hidden');
+    error.classList.add('hidden');
+    content.classList.add('hidden');
+    try {
+        const stats = await fetchJson('/api/stats');
+        document.getElementById('statTotal').textContent = stats.total.toLocaleString();
+        document.getElementById('statVideos').textContent = stats.total_videos.toLocaleString();
+        document.getElementById('statUsers').textContent = stats.total_users.toLocaleString();
+        document.getElementById('statDomestic').textContent = stats.domestic_total.toLocaleString();
+        document.getElementById('statOverseas').textContent = stats.overseas_total.toLocaleString();
+        const total = stats.domestic_total + stats.overseas_total;
+        document.getElementById('statRatio').textContent =
+            total ? (stats.domestic_total / total * 100).toFixed(1) + '%' : '--';
+
+        renderRegionChart(stats);
+        renderRatioChart(stats);
+        renderTrendChart(stats);
+        renderUserChart(stats);
+        renderVideoChart(stats);
+        renderWordcloud(stats);
+
+        loading.classList.add('hidden');
+        content.classList.remove('hidden');
+    } catch (err) {
+        loading.classList.add('hidden');
+        showError('overviewError', err.message);
+    }
+}
+
+// ===================== 评论明细 =====================
+let currentPage = 1;
+let currentTotal = 0;
+const PAGE_SIZE = 20;
+
+async function loadBvOptions() {
+    const select = document.getElementById('filterBv');
+    try {
+        const list = await fetchJson('/api/bvs');
+        const frag = document.createDocumentFragment();
+        list.forEach(function (item) {
+            const opt = document.createElement('option');
+            opt.value = item.bv;
+            opt.textContent = item.bv + '（' + item.count + ' 条）';
+            frag.appendChild(opt);
+        });
+        select.appendChild(frag);
+    } catch (e) {
+        // BV 下拉加载失败不阻塞页面
+        console.warn('加载视频列表失败:', e.message);
+    }
+}
+
+function renderComments(rows) {
+    const tbody = document.getElementById('commentsBody');
+    tbody.innerHTML = '';
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-row">没有符合条件的评论</td></tr>';
+        return;
+    }
+    rows.forEach(function (item) {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td class="user-cell">' + esc(item.user_name) + '</td>' +
+            '<td class="content-cell">' + esc(item.content) + '</td>' +
+            '<td><span class="region-tag' + (item.ip === '海外' ? ' overseas' : '') + '">' + esc(item.ip || '未知') + '</span></td>' +
+            '<td><a class="video-link" href="https://www.bilibili.com/video/' + esc(item.bv) + '" target="_blank" rel="noopener noreferrer">' + esc(item.bv) + '</a></td>' +
+            '<td style="white-space:nowrap;">' + esc(formatTime(item.c_time, item.crawl_at)) + '</td>';
+        tbody.appendChild(tr);
+    });
+}
+
+async function loadComments(page) {
+    currentPage = page;
+    const loading = document.getElementById('commentsLoading');
+    const error = document.getElementById('commentsError');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    loading.classList.remove('hidden');
+    error.classList.add('hidden');
+
+    const params = {
+        page: currentPage,
+        page_size: PAGE_SIZE,
+        keyword: document.getElementById('filterKeyword').value.trim(),
+        region: document.getElementById('filterRegion').value,
+        bv: document.getElementById('filterBv').value,
+        sort: document.getElementById('filterSort').value
+    };
+    try {
+        const data = await fetchJson('/api/comments', params);
+        currentTotal = data.total;
+        renderComments(data.items);
+
+        const totalPages = Math.max(Math.ceil(currentTotal / PAGE_SIZE), 1);
+        document.getElementById('pageInfo').textContent =
+            '第 ' + currentPage + ' / ' + totalPages + ' 页 · 共 ' + currentTotal.toLocaleString() + ' 条';
+        prevBtn.disabled = currentPage <= 1;
+        nextBtn.disabled = currentPage >= totalPages;
+        loading.classList.add('hidden');
+    } catch (err) {
+        loading.classList.add('hidden');
+        document.getElementById('commentsBody').innerHTML = '';
+        showError('commentsError', err.message);
+    }
+}
+
+document.getElementById('searchBtn').addEventListener('click', function () { loadComments(1); });
+document.getElementById('filterKeyword').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') loadComments(1);
+});
+document.getElementById('prevBtn').addEventListener('click', function () { loadComments(currentPage - 1); });
+document.getElementById('nextBtn').addEventListener('click', function () { loadComments(currentPage + 1); });
+
+// ===================== 全局 =====================
+window.addEventListener('resize', function () {
+    Object.keys(chartInstances).forEach(function (id) {
+        chartInstances[id].resize();
+    });
+});
+
+document.getElementById('refreshBtn').addEventListener('click', function () {
+    checkHealth();
+    loadOverview();
+    loadComments(1);
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    checkHealth();
+    loadOverview();
+    loadBvOptions();
+});
+</script>
+</body>
+</html>

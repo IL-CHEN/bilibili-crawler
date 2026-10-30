@@ -1,0 +1,12 @@
+# Web 后端
+Flask>=2.2
+
+# 网络请求
+requests>=2.31
+
+# 数据库
+pymongo>=4.5
+
+# 数据分析
+pandas>=2.0
+jieba>=0.42
