@@ -215,11 +215,11 @@
             </div>
             <div class="card chart-box-full">
                 <div class="chart-title">评论最多视频 TOP10</div>
-                <div id="videoChart" class="chart-box-full" style="height:360px;"></div>
+                <div id="videoChart" class="chart-box"></div>
             </div>
             <div class="card chart-box-full">
                 <div class="chart-title">评论高频词云</div>
-                <div id="wordcloudChart" class="chart-box-full" style="height:360px;"></div>
+                <div id="wordcloudChart" class="chart-box"></div>
             </div>
         </div>
     </div>
@@ -514,6 +514,11 @@ async function loadOverview() {
         document.getElementById('statRatio').textContent =
             total ? (stats.domestic_total / total * 100).toFixed(1) + '%' : '--';
 
+        // 必须先显示容器再初始化图表：
+        // ECharts 在 display:none 的容器上 init 会量到 0 宽度，导致图表不可见或挤在左侧
+        loading.classList.add('hidden');
+        content.classList.remove('hidden');
+
         renderRegionChart(stats);
         renderRatioChart(stats);
         renderTrendChart(stats);
@@ -521,8 +526,8 @@ async function loadOverview() {
         renderVideoChart(stats);
         renderWordcloud(stats);
 
-        loading.classList.add('hidden');
-        content.classList.remove('hidden');
+        // 布局稳定后再统一校准一次尺寸（防首次渲染尺寸偏差）
+        requestAnimationFrame(resizeAllCharts);
     } catch (err) {
         loading.classList.add('hidden');
         showError('overviewError', err.message);
@@ -613,12 +618,14 @@ document.getElementById('filterKeyword').addEventListener('keydown', function (e
 document.getElementById('prevBtn').addEventListener('click', function () { loadComments(currentPage - 1); });
 document.getElementById('nextBtn').addEventListener('click', function () { loadComments(currentPage + 1); });
 
-// ===================== 全局 =====================
-window.addEventListener('resize', function () {
+function resizeAllCharts() {
     Object.keys(chartInstances).forEach(function (id) {
         chartInstances[id].resize();
     });
-});
+}
+
+// ===================== 全局 =====================
+window.addEventListener('resize', resizeAllCharts);
 
 document.getElementById('refreshBtn').addEventListener('click', function () {
     checkHealth();
