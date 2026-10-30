@@ -127,7 +127,7 @@ python -m unittest discover -s tests -v
 
 本项目仅供**学习与研究**使用，数据来源于 B 站公开接口。请遵守：
 
-- [哔哩哔哩用户协议](https://www.bilibili.com/blackboard/activity-ikfbp4pdv.html) 与相关法律法规；
+- [哔哩哔哩用户协议]([用户使用协议](https://www.bilibili.com/blackboard/era/I1IzQXW4myXZIzBi.html)) 与相关法律法规；
 - 控制请求频率（本项目已内置随机延时），避免对目标服务造成压力；
 - 不得将采集数据用于任何商业用途或二次分发。
 
