@@ -8,7 +8,7 @@ class HtmlFetcher(Fetcher):
     def __init__(self):
         self.session = SessionManager().get_session()
 
-    def fetch(self, url: str, params: dict = None) -> str:
+    def fetch(self, url: str, params: dict | None = None) -> str:
         print(f"正在请求 HTML: {url}")
         resp = self.session.get(url, params=params)
         resp.raise_for_status()
@@ -21,7 +21,7 @@ class ApiFetcher(Fetcher):
     def __init__(self):
         self.session = SessionManager().get_session()
 
-    def fetch(self, url: str, params: dict = None) -> dict:
+    def fetch(self, url: str, params: dict | None = None) -> dict:
         print(f"正在请求 API: {url} params={params}")
         resp = self.session.get(url, params=params)
         resp.raise_for_status()

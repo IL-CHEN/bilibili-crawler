@@ -6,7 +6,7 @@ class Fetcher(ABC):
     """数据获取接口"""
 
     @abstractmethod
-    def fetch(self, url: str, params: dict = None) -> Any:
+    def fetch(self, url: str, params: dict | None = None) -> Any:
         pass
 
 
